@@ -1,6 +1,6 @@
-from PyQt6.QtCore import QRegularExpression
-from PyQt6.QtGui import QColor, QTextCharFormat, QSyntaxHighlighter
-from PyQt6.QtWidgets import QApplication, QPlainTextEdit , QWidget , QVBoxLayout , QPushButton , QFileDialog
+from PyQt6.QtCore import QRegularExpression , Qt
+from PyQt6.QtGui import QColor, QTextCharFormat, QSyntaxHighlighter , QFontMetrics
+from PyQt6.QtWidgets import QApplication, QPlainTextEdit , QWidget , QVBoxLayout , QPushButton , QFileDialog , QHBoxLayout
 from QTermWidget import QTermWidget
 import sys , subprocess , pathlib
 
@@ -37,11 +37,12 @@ class SyntaxHighlighter(QSyntaxHighlighter):
 
         self.rules = [
             (QRegularExpression(r"\b(print)\b") , keywordHighlightBasic),
-            (QRegularExpression(r"\b(import)\b") , importHighlight),
+            (QRegularExpression(r"\b(import|from)\b") , importHighlight),
             (QRegularExpression(r'\bimport\s+(\w+)') , libHighlight),
+            (QRegularExpression(r'\bfrom\s+(\w+)') , libHighlight),
             (QRegularExpression(r"[()\[\]]") , parenthesisHighlight),
             (QRegularExpression(r"(\".*?\"|\'.*?\')") , stringHighlight),
-            (QRegularExpression(r"\b(if|elif|else|while|for|in|not|is|return)\b") , keywordHighlightStatements),
+            (QRegularExpression(r"\b(if|elif|else|while|for|in|not|is|return|as)\b") , keywordHighlightStatements),
             (QRegularExpression(r"\b(def|class)\b") , createHighlight),
             (QRegularExpression(r"@\w+") , decoratorHighlight),
             (QRegularExpression(r"#.*") , commentHighlight)
@@ -53,7 +54,7 @@ class SyntaxHighlighter(QSyntaxHighlighter):
             while it.hasNext():
                 match = it.next()
 
-                if pattern.pattern().startswith(r'\bimport\s+'):
+                if pattern.pattern().startswith(r'\bimport\s+') or pattern.pattern().startswith(r'\bfrom\s+'):
                     start = match.capturedStart(1)
                     length = match.capturedLength(1)
                     self.setFormat(start, length, rule)
@@ -95,6 +96,18 @@ def loadCode():
             codeEditor.setPlainText(file.read())
             selectedFile = path
 
+def resizeLineNumbers():
+    fontmetrics = QFontMetrics(lineCounter.font())
+    charSize = fontmetrics.horizontalAdvance("9")
+    text = lineCounter.toPlainText()
+    padding = 11
+    lineCounter.setFixedWidth((len(text.split()[len(text.split()) - 1]) * charSize) + padding)
+
+def updateLineNumbers():
+    lines = [f"{i}\n" for i in range(1, codeEditor.blockCount() + 1)]
+    lineCounter.setPlainText("".join(lines))
+    resizeLineNumbers()
+
 app = QApplication(sys.argv)
 try:
     with open(f"{pathlib.Path(__file__).resolve().parent}/style.qss" , "r") as file:
@@ -105,28 +118,45 @@ except FileNotFoundError:
 window = QWidget()
 window.show()
 
-layout = QVBoxLayout(window)
-layout.setContentsMargins(0 , 0 , 0 , 0)
-layout.setSpacing(0)
+vlayout = QVBoxLayout(window)
+vlayout.setContentsMargins(0 , 0 , 0 , 0)
+vlayout.setSpacing(0)
+
+hLayout = QHBoxLayout()
+vlayout.addLayout(hLayout)
+
+editorContainer = QHBoxLayout()
+vlayout.addLayout(editorContainer)
+
+lineCounter = QPlainTextEdit("1")
+lineCounter.setReadOnly(True)
+lineCounter.setFixedWidth(25)
+lineCounter.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+lineCounter.setObjectName("lineCounter")
+editorContainer.addWidget(lineCounter)
 
 codeEditor = QPlainTextEdit()
-layout.addWidget(codeEditor)
+codeEditor.textChanged.connect(updateLineNumbers)
+codeEditor.verticalScrollBar().valueChanged.connect(
+    lambda value=codeEditor.verticalScrollBar().value: lineCounter.verticalScrollBar().setValue(value)
+)
+editorContainer.addWidget(codeEditor)
 
 console = QTermWidget()
 console.setColorScheme("BreezeModified")
-layout.addWidget(console)
+vlayout.addWidget(console)
 
 saveButton = QPushButton("Save")
 saveButton.clicked.connect(lambda e: saveCode())
-layout.addWidget(saveButton)
+hLayout.addWidget(saveButton)
 
 runButton = QPushButton("Run")
 runButton.clicked.connect(lambda e: runCode())
-layout.addWidget(runButton)
+hLayout.addWidget(runButton)
 
 loadButton = QPushButton("Load")
 loadButton.clicked.connect(lambda e: loadCode())
-layout.addWidget(loadButton)
+hLayout.addWidget(loadButton)
 
 syntaxHighlighter = SyntaxHighlighter(codeEditor.document())
 
