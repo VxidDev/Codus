@@ -1,0 +1,6 @@
+QPlainTextEdit {
+    background: rgb(25, 37, 53);
+    font-size: 25px;
+    font-family: 'dejaVu sans mono';
+    color: white;
+}
