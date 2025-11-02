@@ -81,6 +81,20 @@ def saveCode():
             file.write(codeEditor.toPlainText())
             selectedFile = path
 
+def loadCode():
+    global selectedFile
+    path , _ = QFileDialog.getOpenFileName(
+        None,
+        "Select Load Path",
+        "/",
+        "Python Files (*.py);;All Files(*)"
+    )
+
+    if path:
+        with open(path , "r" , encoding="utf-8") as file:
+            codeEditor.setPlainText(file.read())
+            selectedFile = path
+
 app = QApplication(sys.argv)
 try:
     with open(f"{pathlib.Path(__file__).resolve().parent}/style.qss" , "r") as file:
@@ -109,6 +123,10 @@ layout.addWidget(saveButton)
 runButton = QPushButton("Run")
 runButton.clicked.connect(lambda e: runCode())
 layout.addWidget(runButton)
+
+loadButton = QPushButton("Load")
+loadButton.clicked.connect(lambda e: loadCode())
+layout.addWidget(loadButton)
 
 syntaxHighlighter = SyntaxHighlighter(codeEditor.document())
 
