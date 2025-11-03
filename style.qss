@@ -10,12 +10,17 @@ QPlainTextEdit#lineCounter {
 }
 
 QPushButton {
-    background: rgb(25 , 37 , 53);
+    background: rgb(45 , 57 , 73);
     color: white;
     border-radius: 0px;
-    border: 1px solid rgba(255 , 255 , 255 , 0.2);
+    border: None;
 }
 
 QPushButton:hover {
     background: rgb(75 , 87 , 103);
+    border: None;
+}
+
+QScrollBar {
+    background: rgb(45 , 57 , 73);
 }
