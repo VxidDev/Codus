@@ -1,0 +1,6 @@
+{   
+    "name": "INeedThis",
+    "exec-file": "ineedthis",
+    "exec": "main",
+    "event": "onRun"
+}
