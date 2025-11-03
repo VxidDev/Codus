@@ -2,7 +2,7 @@ from PyQt6.QtCore import QRegularExpression , Qt
 from PyQt6.QtGui import QColor, QTextCharFormat, QSyntaxHighlighter , QFontMetrics
 from PyQt6.QtWidgets import QApplication, QPlainTextEdit , QWidget , QVBoxLayout , QPushButton , QFileDialog , QHBoxLayout
 from QTermWidget import QTermWidget
-import sys , subprocess , pathlib
+import sys , subprocess , pathlib , json , importlib
 
 class SyntaxHighlight(QTextCharFormat):
     def __init__(self , fgColor: QColor):
@@ -13,7 +13,6 @@ class SyntaxHighlight(QTextCharFormat):
 class SyntaxHighlighter(QSyntaxHighlighter):
     def __init__(self , document , rules: dict):
         super().__init__(document)
-        
         self.rules = rules
 
     def highlightBlock(self, text):
@@ -33,6 +32,8 @@ class App(QWidget):
     def __init__(self):
         super().__init__() # initialize QWidget
         self.show()
+
+        self.path = pathlib.Path(__file__).resolve().parent
         
         self.vlayout = QVBoxLayout(self) # vertical layout for rows
         self.vlayout.setContentsMargins(0 , 0 , 0 , 0)
@@ -119,10 +120,15 @@ class App(QWidget):
         self.lineCounter.setFixedWidth((len(text.split()[len(text.split()) - 1]) * charSize) + padding)
 
     def runCode(self):
-        with open(f"{pathlib.Path(__file__).resolve().parent / 'temp.py' if not self.selectedFile else self.selectedFile}" , "w") as file:
+        with open(f"{self.path / 'temp.py' if not self.selectedFile else self.selectedFile}" , "w") as file:
             file.write(self.codeEditor.toPlainText())
-        
-        self.console.sendText(f"python '{pathlib.Path(__file__).resolve().parent / 'temp.py' if not self.selectedFile else self.selectedFile}'\n")
+
+        if len(self.plugins) != 0:
+            for plugin in self.plugins:
+                if plugin["event"] == "onRun":
+                    self.runPluginFunc(plugin)
+
+        self.console.sendText(f"python '{self.path / 'temp.py' if not self.selectedFile else self.selectedFile}'\n")
 
 
     def saveCode(self):
@@ -151,14 +157,52 @@ class App(QWidget):
                 self.codeEditor.setPlainText(file.read())
                 self.selectedFile = path
 
+    def loadStylesheet(self):
+        try:
+            with open(f"{self.path}/style.qss" , "r") as file:
+                app.setStyleSheet(file.read())
+        except FileNotFoundError:
+            print("QSS file not found. Skipping...")
+
+    def loadPlugins(self):
+        plugins_path = self.path / "plugins"
+        if not plugins_path.is_dir():
+            return None
+
+        self.plugins = []  # store loaded plugin data
+
+        for plugin_dir in plugins_path.iterdir():
+            if not plugin_dir.is_dir():
+                continue  # skip files
+
+            project_file = plugin_dir / "project.json"
+            if not project_file.exists():
+                print(f"Skipping {plugin_dir.name}: project.json not found")
+                continue
+
+            try:
+                with open(project_file, "r", encoding="utf-8") as f:
+                    pluginData = json.load(f)
+                    pluginData["module-name"] = f"plugins.{plugin_dir.stem}.{pluginData['exec-file']}"
+                    self.plugins.append(pluginData)
+                    print(f"Importing {plugin_dir.name}...")
+                    importlib.import_module(f"plugins.{plugin_dir.stem}.{pluginData['exec-file']}")
+                    print(f"Loaded plugin: {plugin_dir.name}")
+            except Exception as e:
+                print(f"Error loading plugin {plugin_dir.name}: {e}")
+
+    def runPluginFunc(self , plugin):
+        try:
+            func = getattr(sys.modules[plugin["module-name"]] , plugin["exec"])
+            func()
+        except (AttributeError , KeyError) as e:
+            print(str(e))
+            print(f"Function {plugin['exec']} not found inside of {plugin['exec-file']}. [{plugin['name']}]")
+
 app = QApplication(sys.argv) # Instance of QApplication to allow adding QWidgets
 
-try:
-    with open(f"{pathlib.Path(__file__).resolve().parent}/style.qss" , "r") as file:
-        app.setStyleSheet(file.read())
-except FileNotFoundError:
-    print("QSS file not found. Skipping...")
-
 window = App()
+window.loadStylesheet()
+window.loadPlugins()
 
 sys.exit(app.exec())
