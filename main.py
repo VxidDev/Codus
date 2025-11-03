@@ -4,49 +4,17 @@ from PyQt6.QtWidgets import QApplication, QPlainTextEdit , QWidget , QVBoxLayout
 from QTermWidget import QTermWidget
 import sys , subprocess , pathlib
 
+class SyntaxHighlight(QTextCharFormat):
+    def __init__(self , fgColor: QColor):
+        super().__init__()
+
+        self.setForeground(fgColor)
+
 class SyntaxHighlighter(QSyntaxHighlighter):
-    def __init__(self , document):
+    def __init__(self , document , rules: dict):
         super().__init__(document)
-
-        keywordHighlightBasic = QTextCharFormat()
-        keywordHighlightBasic.setForeground(QColor("blue"))
-
-        keywordHighlightStatements = QTextCharFormat()
-        keywordHighlightStatements.setForeground(QColor("orange"))
-
-        importHighlight = QTextCharFormat()
-        importHighlight.setForeground(QColor("purple"))
-
-        libHighlight = QTextCharFormat()
-        libHighlight.setForeground(QColor("pink"))
-
-        parenthesisHighlight = QTextCharFormat()
-        parenthesisHighlight.setForeground(QColor("yellow"))
-
-        stringHighlight = QTextCharFormat()
-        stringHighlight.setForeground(QColor("green"))
-
-        createHighlight = QTextCharFormat()
-        createHighlight.setForeground(QColor("magenta"))
-
-        decoratorHighlight = QTextCharFormat()
-        decoratorHighlight.setForeground(QColor("lightblue"))
-
-        commentHighlight = QTextCharFormat()
-        commentHighlight.setForeground(QColor("gray"))
-
-        self.rules = [
-            (QRegularExpression(r"\b(print)\b") , keywordHighlightBasic),
-            (QRegularExpression(r"\b(import|from)\b") , importHighlight),
-            (QRegularExpression(r'\bimport\s+(\w+)') , libHighlight),
-            (QRegularExpression(r'\bfrom\s+(\w+)') , libHighlight),
-            (QRegularExpression(r"[()\[\]]") , parenthesisHighlight),
-            (QRegularExpression(r"(\".*?\"|\'.*?\')") , stringHighlight),
-            (QRegularExpression(r"\b(if|elif|else|while|for|in|not|is|return|as)\b") , keywordHighlightStatements),
-            (QRegularExpression(r"\b(def|class)\b") , createHighlight),
-            (QRegularExpression(r"@\w+") , decoratorHighlight),
-            (QRegularExpression(r"#.*") , commentHighlight)
-        ]
+        
+        self.rules = rules
 
     def highlightBlock(self, text):
         for pattern, rule in self.rules:
@@ -61,105 +29,136 @@ class SyntaxHighlighter(QSyntaxHighlighter):
                 else:
                     self.setFormat(match.capturedStart(), match.capturedLength(), rule)
 
-def runCode():
-    with open(f"{pathlib.Path(__file__).resolve().parent / 'temp.py' if not selectedFile else selectedFile}" , "w") as file:
-        file.write(codeEditor.toPlainText())
+class App(QWidget):
+    def __init__(self):
+        super().__init__() # initialize QWidget
+        self.show()
+        
+        self.vlayout = QVBoxLayout(self) # vertical layout for rows
+        self.vlayout.setContentsMargins(0 , 0 , 0 , 0)
+        self.vlayout.setSpacing(0)
+
+        self.setLayout(self.vlayout)
+
+        self.hlayout = QHBoxLayout() # horizontal layout for columns
+        self.vlayout.addLayout(self.hlayout) # adding horizontal layout to vertical layout because QWidget cant have 2 layouts by itself.
+
+        self.editorContainer = QHBoxLayout() # another horizontal layout for add lineCounter.
+        self.vlayout.addLayout(self.editorContainer)
+
+        self.lineCounter = QPlainTextEdit("1")
+        self.lineCounter.setReadOnly(True)
+        self.lineCounter.setFixedWidth(25)
+        self.lineCounter.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.lineCounter.setObjectName("lineCounter")
+        self.editorContainer.addWidget(self.lineCounter)
+
+        self.codeEditor = QPlainTextEdit()
+        self.codeEditor.textChanged.connect(self.updateLineNumbers)
+        self.codeEditor.verticalScrollBar().valueChanged.connect(
+            lambda value=self.codeEditor.verticalScrollBar().value: self.lineCounter.verticalScrollBar().setValue(value)
+)
+
+        self.editorContainer.addWidget(self.codeEditor)
+
+        self.console = QTermWidget()
+        self.console.setColorScheme("BreezeModified")
+        self.vlayout.addWidget(self.console)
+
+        self.saveButton = QPushButton("Save")
+        self.saveButton.clicked.connect(lambda e: self.saveCode())
+        self.hlayout.addWidget(self.saveButton)
+
+        self.runButton = QPushButton("Run")
+        self.runButton.clicked.connect(lambda e: self.runCode())
+        self.hlayout.addWidget(self.runButton)
+
+        self.loadButton = QPushButton("Load")
+        self.loadButton.clicked.connect(lambda e: self.loadCode())
+        self.hlayout.addWidget(self.loadButton)
+        
+        self.formats = {
+            "keywordBasic": SyntaxHighlight(QColor("blue")),
+            "keywordStatements": SyntaxHighlight(QColor("orange")),
+            "import": SyntaxHighlight(QColor("purple")),
+            "lib": SyntaxHighlight(QColor("pink")),
+            "parenthesis": SyntaxHighlight(QColor("yellow")),
+            "string": SyntaxHighlight(QColor("green")),
+            "create": SyntaxHighlight(QColor("magenta")),
+            "decorator": SyntaxHighlight(QColor("lightblue")),
+            "comment": SyntaxHighlight(QColor("gray"))
+        }
+
+        self.syntaxRules = [
+            (QRegularExpression(r"\b(print)\b"), self.formats["keywordBasic"]),
+            (QRegularExpression(r"\b(import|from)\b"), self.formats["import"]),
+            (QRegularExpression(r'\bimport\s+(\w+)'), self.formats["lib"]),
+            (QRegularExpression(r'\bfrom\s+(\w+)'), self.formats["lib"]),
+            (QRegularExpression(r"[()\[\]]"), self.formats["parenthesis"]),
+            (QRegularExpression(r"(\".*?\"|\'.*?\')"), self.formats["string"]),
+            (QRegularExpression(r"\b(if|elif|else|while|for|in|not|is|return|as)\b"), self.formats["keywordStatements"]),
+            (QRegularExpression(r"\b(def|class)\b"), self.formats["create"]),
+            (QRegularExpression(r"@\w+"), self.formats["decorator"]),
+            (QRegularExpression(r"#.*"), self.formats["comment"])
+        ]
+
+        self.syntaxHighlighter = SyntaxHighlighter(self.codeEditor.document() , self.syntaxRules)
+
+        self.selectedFile = None
     
-    console.sendText(f"python '{pathlib.Path(__file__).resolve().parent / 'temp.py' if not selectedFile else selectedFile}'\n")
+    def updateLineNumbers(self):
+        lines = [f"{i}\n" for i in range(1, self.codeEditor.blockCount() + 1)]
+        self.lineCounter.setPlainText("".join(lines))
+        self.resizeLineNumbers()
+
+    def resizeLineNumbers(self):
+        fontmetrics = QFontMetrics(self.lineCounter.font())
+        charSize = fontmetrics.horizontalAdvance("9")
+        text = self.lineCounter.toPlainText()
+        padding = 11
+        self.lineCounter.setFixedWidth((len(text.split()[len(text.split()) - 1]) * charSize) + padding)
+
+    def runCode(self):
+        with open(f"{pathlib.Path(__file__).resolve().parent / 'temp.py' if not self.selectedFile else self.selectedFile}" , "w") as file:
+            file.write(self.codeEditor.toPlainText())
+        
+        self.console.sendText(f"python '{pathlib.Path(__file__).resolve().parent / 'temp.py' if not self.selectedFile else self.selectedFile}'\n")
 
 
-def saveCode():
-    global selectedFile
-    path, _ = QFileDialog.getSaveFileName(
-        None,                      
-        "Select Save Path",          
-        "/",                        
-        "Python Files (*.py);;All Files (*)" 
-    )
+    def saveCode(self):
+        path, _ = QFileDialog.getSaveFileName(
+            None,                      
+            "Select Save Path",          
+            "/",                        
+            "Python Files (*.py);;All Files (*)" 
+        )
 
-    if path:
-        with open(path, "w", encoding="utf-8") as file:
-            file.write(codeEditor.toPlainText())
-            selectedFile = path
+        if path:
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(self.codeEditor.toPlainText())
+                self.selectedFile = path
 
-def loadCode():
-    global selectedFile
-    path , _ = QFileDialog.getOpenFileName(
-        None,
-        "Select Load Path",
-        "/",
-        "Python Files (*.py);;All Files(*)"
-    )
+    def loadCode(self):
+        path , _ = QFileDialog.getOpenFileName(
+            None,
+            "Select Load Path",
+            "/",
+            "Python Files (*.py);;All Files(*)"
+        )
 
-    if path:
-        with open(path , "r" , encoding="utf-8") as file:
-            codeEditor.setPlainText(file.read())
-            selectedFile = path
+        if path:
+            with open(path , "r" , encoding="utf-8") as file:
+                self.codeEditor.setPlainText(file.read())
+                self.selectedFile = path
 
-def resizeLineNumbers():
-    fontmetrics = QFontMetrics(lineCounter.font())
-    charSize = fontmetrics.horizontalAdvance("9")
-    text = lineCounter.toPlainText()
-    padding = 11
-    lineCounter.setFixedWidth((len(text.split()[len(text.split()) - 1]) * charSize) + padding)
+app = QApplication(sys.argv) # Instance of QApplication to allow adding QWidgets
 
-def updateLineNumbers():
-    lines = [f"{i}\n" for i in range(1, codeEditor.blockCount() + 1)]
-    lineCounter.setPlainText("".join(lines))
-    resizeLineNumbers()
-
-app = QApplication(sys.argv)
 try:
     with open(f"{pathlib.Path(__file__).resolve().parent}/style.qss" , "r") as file:
         app.setStyleSheet(file.read())
 except FileNotFoundError:
     print("QSS file not found. Skipping...")
 
-window = QWidget()
-window.show()
-
-vlayout = QVBoxLayout(window)
-vlayout.setContentsMargins(0 , 0 , 0 , 0)
-vlayout.setSpacing(0)
-
-hLayout = QHBoxLayout()
-vlayout.addLayout(hLayout)
-
-editorContainer = QHBoxLayout()
-vlayout.addLayout(editorContainer)
-
-lineCounter = QPlainTextEdit("1")
-lineCounter.setReadOnly(True)
-lineCounter.setFixedWidth(25)
-lineCounter.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-lineCounter.setObjectName("lineCounter")
-editorContainer.addWidget(lineCounter)
-
-codeEditor = QPlainTextEdit()
-codeEditor.textChanged.connect(updateLineNumbers)
-codeEditor.verticalScrollBar().valueChanged.connect(
-    lambda value=codeEditor.verticalScrollBar().value: lineCounter.verticalScrollBar().setValue(value)
-)
-editorContainer.addWidget(codeEditor)
-
-console = QTermWidget()
-console.setColorScheme("BreezeModified")
-vlayout.addWidget(console)
-
-saveButton = QPushButton("Save")
-saveButton.clicked.connect(lambda e: saveCode())
-hLayout.addWidget(saveButton)
-
-runButton = QPushButton("Run")
-runButton.clicked.connect(lambda e: runCode())
-hLayout.addWidget(runButton)
-
-loadButton = QPushButton("Load")
-loadButton.clicked.connect(lambda e: loadCode())
-hLayout.addWidget(loadButton)
-
-syntaxHighlighter = SyntaxHighlighter(codeEditor.document())
-
-selectedFile = None
+window = App()
 
 sys.exit(app.exec())
