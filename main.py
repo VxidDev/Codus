@@ -34,6 +34,7 @@ class App(QWidget):
         self.show()
 
         self.path = pathlib.Path(__file__).resolve().parent
+        self.plugins = []
         
         self.vlayout = QVBoxLayout(self) # vertical layout for rows
         self.vlayout.setContentsMargins(0 , 0 , 0 , 0)
@@ -123,10 +124,7 @@ class App(QWidget):
         with open(f"{self.path / 'temp.py' if not self.selectedFile else self.selectedFile}" , "w") as file:
             file.write(self.codeEditor.toPlainText())
 
-        if len(self.plugins) != 0:
-            for plugin in self.plugins:
-                if plugin["event"] == "onRun":
-                    self.runPluginFunc(plugin)
+        self.runPluginFunc(self.checkPluginEvent("onRun")) if self.checkPluginEvent("onRun") else ""
 
         self.console.sendText(f"python '{self.path / 'temp.py' if not self.selectedFile else self.selectedFile}'\n")
 
@@ -143,6 +141,10 @@ class App(QWidget):
             with open(path, "w", encoding="utf-8") as file:
                 file.write(self.codeEditor.toPlainText())
                 self.selectedFile = path
+                self.runPluginFunc(self.checkPluginEvent("onSave")) if self.checkPluginEvent("onSave") else ""
+                return True
+
+        self.runPluginFunc(self.checkPluginEvent("onSaveAborted")) if self.checkPluginEvent("onSaveAborted") else ""
 
     def loadCode(self):
         path , _ = QFileDialog.getOpenFileName(
@@ -156,6 +158,10 @@ class App(QWidget):
             with open(path , "r" , encoding="utf-8") as file:
                 self.codeEditor.setPlainText(file.read())
                 self.selectedFile = path
+                self.runPluginFunc(self.checkPluginEvent("onLoad")) if self.checkPluginEvent("onLoad") else ""
+                return True
+
+        self.runPluginFunc(self.checkPluginEvent("onLoadAborted")) if self.checkPluginEvent("onLoadAborted") else ""
 
     def loadStylesheet(self):
         try:
@@ -199,10 +205,20 @@ class App(QWidget):
             print(str(e))
             print(f"Function {plugin['exec']} not found inside of {plugin['exec-file']}. [{plugin['name']}]")
 
+    def checkPluginEvent(self , event):
+        if len(self.plugins) == 0:
+            return None
+
+        for plugin in self.plugins:
+            if plugin["event"] == event:
+                return plugin
+
 app = QApplication(sys.argv) # Instance of QApplication to allow adding QWidgets
 
 window = App()
 window.loadStylesheet()
 window.loadPlugins()
+
+window.runPluginFunc(window.checkPluginEvent("onStart")) if window.checkPluginEvent("onStart") else ""
 
 sys.exit(app.exec())
