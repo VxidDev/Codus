@@ -6,6 +6,9 @@
 
 Unleash your coding potential with Codus, the lightweight Python IDE meticulously crafted for peak productivity. Escape the distractions and immerse yourself in a clean, intuitive environment designed to streamline your workflow. Codus empowers you to write, run, and test your code with unparalleled efficiency. Benefit from intelligent syntax highlighting that brings your code to life, an integrated terminal for seamless command-line interaction, and a quick-run capability that lets you execute your scripts with a single click. But that's not all – Codus is built for customization. Tailor the IDE to your exact preferences and create a coding experience that's uniquely yours. Whether you're a seasoned developer or just starting your coding journey, Codus is your trusted companion for focused, productive coding sessions.
 
+## Screenshots
+![screenshot](sc.png)
+
 ## 📁 Project Structure
 
 ```
